@@ -1,45 +1,135 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:laundry_application/core/theme/app_theme.dart';
+import 'package:laundry_application/core/utils/date_formatter.dart';
+import 'package:laundry_application/data/database/database_helper.dart';
+import 'package:laundry_application/logic/cubits/auth/auth_cubit.dart';
+import 'package:laundry_application/logic/cubits/auth/auth_state.dart';
+import 'package:laundry_application/presentation/screens/auth/login_screen.dart';
+import 'package:laundry_application/presentation/screens/main_screen.dart';
+import 'package:laundry_application/presentation/screens/onboarding/onboarding_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(const MyApp());
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Set status bar style
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
+
+  // Initialize all at once
+  final results = await Future.wait([
+    SharedPreferences.getInstance(),
+    DateFormatter.initialize(),
+    DatabaseHelper.instance.database,
+  ]);
+
+  final prefs = results[0] as SharedPreferences;
+  final showOnboarding = !(prefs.getBool('onboarding_complete') ?? false);
+
+  runApp(MyApp(showOnboarding: showOnboarding));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool showOnboarding;
+
+  const MyApp({super.key, required this.showOnboarding});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    return MultiBlocProvider(
+      providers: [BlocProvider(create: (_) => AuthCubit()..checkAuthStatus())],
+      child: MaterialApp(
+        title: 'Laundry JagoFlutter',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        home: AuthWrapper(showOnboarding: showOnboarding),
+      ),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+/// Wrapper widget that handles auth state changes
+class AuthWrapper extends StatefulWidget {
+  final bool showOnboarding;
+
+  const AuthWrapper({super.key, required this.showOnboarding});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _AuthWrapperState extends State<AuthWrapper> {
+  late bool _showOnboarding;
+
+  @override
+  void initState() {
+    super.initState();
+    _showOnboarding = widget.showOnboarding;
+  }
+
+  void _onOnboardingComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_complete', true);
+    setState(() {
+      _showOnboarding = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+    if (_showOnboarding) {
+      return OnboardingScreen(onComplete: _onOnboardingComplete);
+    }
 
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: .center,
-          children: [const Text('Start Home')],
-        ),
-      ),
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, state) {
+        // Show loading indicator while checking auth status
+        if (state is AuthInitial || state is AuthLoading) {
+          return Scaffold(
+            backgroundColor: AppThemeColors.background,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 120,
+                    height: 120,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: AppRadius.xlRadius,
+                      boxShadow: AppShadows.medium,
+                    ),
+                    child: Image.asset(
+                      'assets/icons/logolaundry.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const CircularProgressIndicator(
+                    color: AppThemeColors.primary,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Show main screen if authenticated
+        if (state is AuthAuthenticated) {
+          return const MainScreen();
+        }
+
+        // Show login screen if not authenticated
+        return const LoginScreen();
+      },
     );
   }
 }
