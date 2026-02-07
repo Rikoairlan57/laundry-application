@@ -6,13 +6,14 @@ import 'package:laundry_application/data/models/order.dart';
 import 'package:laundry_application/data/models/user.dart';
 import 'package:laundry_application/logic/cubits/auth/auth_cubit.dart';
 import 'package:laundry_application/logic/cubits/auth/auth_state.dart';
-
+import 'package:laundry_application/logic/cubits/customer/customer_cubit.dart';
 import 'package:laundry_application/logic/cubits/dashboard/dashboard_cubit.dart';
 import 'package:laundry_application/logic/cubits/dashboard/dashboard_state.dart';
 import 'package:laundry_application/logic/cubits/order/order_cubit.dart';
 import 'package:laundry_application/logic/cubits/service/service_cubit.dart';
 import 'package:laundry_application/logic/cubits/printer/printer_cubit.dart';
-
+import 'package:laundry_application/presentation/screens/orders/order_form_screen.dart';
+import 'package:laundry_application/presentation/screens/orders/order_detail_screen.dart';
 import 'package:laundry_application/presentation/screens/orders/order_list_screen.dart';
 import 'package:laundry_application/presentation/screens/services/service_list_screen.dart';
 import 'package:laundry_application/presentation/screens/settings/printer_setting_screen.dart';
@@ -351,6 +352,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: AppSpacing.md),
         Row(
           children: [
+            Expanded(
+              child: _buildQuickActionItem(
+                icon: Icons.add_circle,
+                label: 'Order Baru',
+                color: AppThemeColors.primary,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MultiBlocProvider(
+                        providers: [
+                          BlocProvider(
+                            create: (_) => ServiceCubit()..loadServices(),
+                          ),
+                          BlocProvider(
+                            create: (_) => CustomerCubit()..loadCustomers(),
+                          ),
+                          BlocProvider.value(value: context.read<OrderCubit>()),
+                        ],
+                        child: const OrderFormScreen(),
+                      ),
+                    ),
+                  ).then((_) => _dashboardCubit.loadDashboard());
+                },
+              ),
+            ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _buildQuickActionItem(
@@ -627,8 +654,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          BlocProvider.value(value: context.read<OrderCubit>()),
+                      builder: (_) => BlocProvider.value(
+                        value: context.read<OrderCubit>(),
+                        child: OrderDetailScreen(orderId: order.id!),
+                      ),
                     ),
                   ).then((_) => _dashboardCubit.loadDashboard());
                 },
