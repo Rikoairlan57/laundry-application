@@ -4,6 +4,9 @@ import 'package:laundry_application/core/theme/app_theme.dart';
 import 'package:laundry_application/data/models/user.dart';
 import 'package:laundry_application/logic/cubits/auth/auth_cubit.dart';
 import 'package:laundry_application/logic/cubits/auth/auth_state.dart';
+import 'package:laundry_application/logic/cubits/order/order_cubit.dart';
+import 'package:laundry_application/logic/cubits/user/user_cubit.dart';
+import 'package:laundry_application/logic/cubits/report/report_cubit.dart';
 import 'package:laundry_application/presentation/screens/dashboard/dashboard_screen.dart';
 import 'package:laundry_application/presentation/screens/orders/order_list_screen.dart';
 import 'package:laundry_application/presentation/screens/reports/report_screen.dart';
@@ -18,6 +21,19 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  late OrderCubit _orderCubit;
+
+  @override
+  void initState() {
+    super.initState();
+    _orderCubit = OrderCubit()..loadOrders();
+  }
+
+  @override
+  void dispose() {
+    _orderCubit.close();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +48,7 @@ class _MainScreenState extends State<MainScreen> {
         final user = state.user;
         final isOwner = user.role == UserRole.owner;
 
-        // Bottom navigation items
+        // Build navigation items based on role
         final navItems = <BottomNavigationBarItem>[
           const BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
@@ -46,32 +62,56 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ];
 
+        // Only owner can access reports
         if (isOwner) {
-          navItems.addAll(const [
-            BottomNavigationBarItem(
+          navItems.add(
+            const BottomNavigationBarItem(
               icon: Icon(Icons.analytics_outlined),
               activeIcon: Icon(Icons.analytics),
               label: 'Laporan',
             ),
-            BottomNavigationBarItem(
+          );
+        }
+
+        // Only owner can access settings
+        if (isOwner) {
+          navItems.add(
+            const BottomNavigationBarItem(
               icon: Icon(Icons.settings_outlined),
               activeIcon: Icon(Icons.settings),
               label: 'Settings',
             ),
-          ]);
+          );
         }
 
-        // Screens
+        // Build screens list based on role
         final screens = <Widget>[
-          const DashboardScreen(),
-          const OrderListScreen(),
+          BlocProvider.value(
+            value: _orderCubit,
+            child: const DashboardScreen(),
+          ),
+          BlocProvider.value(
+            value: _orderCubit,
+            child: const OrderListScreen(),
+          ),
         ];
 
         if (isOwner) {
-          screens.addAll(const [ReportScreen(), SettingsScreen()]);
+          screens.add(
+            BlocProvider(
+              create: (_) => ReportCubit(),
+              child: const ReportScreen(),
+            ),
+          );
+          screens.add(
+            BlocProvider(
+              create: (_) => UserCubit(),
+              child: const SettingsScreen(),
+            ),
+          );
         }
 
-        // Safety check
+        // Ensure current index is valid
         if (_currentIndex >= screens.length) {
           _currentIndex = 0;
         }
@@ -97,9 +137,11 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       child: SafeArea(
-        child: SizedBox(
+        child: Container(
           height: 64,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(navItems.length, (index) {
               final item = navItems[index];
               final isSelected = _currentIndex == index;
