@@ -1,5 +1,3 @@
-
-
 import 'package:laundry_application/data/database/database_helper.dart';
 import 'package:laundry_application/data/models/order.dart';
 import 'package:laundry_application/data/models/order_item.dart';
